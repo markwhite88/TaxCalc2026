@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, LabelList } from 'recharts';
+﻿import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, LabelList, LineChart, Line, Legend } from 'recharts';
 
 // --- Tax Calculation Logic (unchanged except standard deduction) ---
 const FEDERAL_BRACKETS_MFJ = [
@@ -33,7 +33,7 @@ const STATE_TAX_DATA = {
     { rate: 0.123, min: 1485133, max: Infinity }
   ],
   'Colorado': [{ rate: 0.044, min: 0, max: Infinity }],
-  'Ohio': [ { rate: 0.00, min: 0, max: 26050}, { rate: 0.0275, min: 26051, max: 100000}, { rate: 0.035, min: 100001, max: Infinity} ],
+  'Ohio': [ { rate: 0.00, min: 0, max: 26050}, { rate: 0.0275, min: 26051, max: 100000}],
   'North Carolina': [{ rate: 0.0425, min: 0, max: Infinity }],
   'Texas': [], 'Florida': [],
 };
@@ -77,9 +77,9 @@ function getInterestSchedule({ amount, annualRate, years = 10 }) {
   }
   return yearInterest.map((interest, idx) => ({ year: idx + 1, interest }));
 }
-const formatCurrency = (value) => {
+const formatCurrency = (value, digits = 0) => {
   if (typeof value !== 'number') return '$0.00';
-  return value.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+  return value.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: digits });
 };
 function calcMonthlyTakeHomeDelta({
   origDeduction,
@@ -171,6 +171,20 @@ const StateCheckbox = React.memo(({ state, isSelected, onChange }) => (
     </label>
 ));
 
+const TabButton = ({ label, isActive, onClick }) => (
+  <button
+    onClick={onClick}
+    className={`px-3 sm:px-4 py-2 text-sm font-semibold rounded-t-lg border-b-2 transition-colors duration-200
+      ${isActive
+        ? 'text-indigo-600 border-indigo-600 bg-white'
+        : 'text-gray-500 border-transparent hover:text-gray-700 hover:border-gray-300'
+      }`
+    }
+  >
+    {label}
+  </button>
+);
+
 // --- AnalysisCharts Component (unchanged) ---
 const AnalysisCharts = ({ resultsByState, selectedStates }) => {
     const [baseState, setBaseState] = useState(selectedStates[0] || '');
@@ -219,17 +233,17 @@ const AnalysisCharts = ({ resultsByState, selectedStates }) => {
     };
 
     return (
-        <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-200">
-            <h2 className="text-2xl font-semibold text-gray-800 border-b pb-3 mb-6">Scenario Analysis</h2>
+        <div className="bg-white p-4 sm:p-6 rounded-xl shadow-lg border border-gray-200">
+            <h2 className="text-xl sm:text-2xl font-semibold text-gray-800 border-b pb-3 mb-6">Scenario Analysis</h2>
             <div className="flex justify-center items-center gap-2 mb-6 text-sm">
-                <label htmlFor="baseStateSelect" className="text-gray-600 font-medium">Compare All Scenarios Against:</label>
+                <label htmlFor="baseStateSelect" className="text-gray-600 font-medium">Compare Against:</label>
                 <select id="baseStateSelect" value={baseState} onChange={(e) => setBaseState(e.target.value)} className="p-1 border border-gray-300 rounded-md bg-white">
                     {selectedStates.map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
             </div>
-             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-end">
+             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-end">
                 <div>
-                    <h3 className="text-xl font-semibold text-center mb-2">Net Cash Delta (After Housing)</h3>
+                    <h3 className="text-lg sm:text-xl font-semibold text-center mb-2">Net Cash Delta (After Housing)</h3>
                      <div className="flex justify-center items-center gap-4 mb-4 text-sm">
                          <div className="inline-flex rounded-md shadow-sm">
                              <button onClick={() => setNetCashDeltaView('monthly')} className={`px-3 py-1 text-xs font-medium rounded-l-lg border ${netCashDeltaView === 'monthly' ? 'bg-indigo-500 text-white' : 'bg-white text-gray-600'}`}>Monthly</button>
@@ -237,7 +251,7 @@ const AnalysisCharts = ({ resultsByState, selectedStates }) => {
                          </div>
                     </div>
                     <ResponsiveContainer width="100%" height={300}>
-                        <BarChart data={netCashDeltaData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                        <BarChart data={netCashDeltaData} margin={{ top: 20, right: 20, left: -10, bottom: 5 }}>
                             <CartesianGrid strokeDasharray="3 3" />
                             <XAxis dataKey="name" />
                             <YAxis tickFormatter={(value) => formatCurrency(value)} />
@@ -250,7 +264,7 @@ const AnalysisCharts = ({ resultsByState, selectedStates }) => {
                     </ResponsiveContainer>
                 </div>
                  <div>
-                    <h3 className="text-xl font-semibold text-center mb-2">Take-Home Pay Delta</h3>
+                    <h3 className="text-lg sm:text-xl font-semibold text-center mb-2">Take-Home Pay Delta</h3>
                     <div className="flex justify-center items-center gap-4 mb-4 text-sm">
                          <div className="inline-flex rounded-md shadow-sm">
                              <button onClick={() => setTakeHomeDeltaView('monthly')} className={`px-3 py-1 text-xs font-medium rounded-l-lg border ${takeHomeDeltaView === 'monthly' ? 'bg-indigo-500 text-white' : 'bg-white text-gray-600'}`}>Monthly</button>
@@ -258,7 +272,7 @@ const AnalysisCharts = ({ resultsByState, selectedStates }) => {
                          </div>
                     </div>
                     <ResponsiveContainer width="100%" height={300}>
-                        <BarChart data={takeHomeDeltaData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                        <BarChart data={takeHomeDeltaData} margin={{ top: 20, right: 20, left: -10, bottom: 5 }}>
                             <CartesianGrid strokeDasharray="3 3" />
                             <XAxis dataKey="name" />
                             <YAxis tickFormatter={(value) => formatCurrency(value)} />
@@ -275,7 +289,245 @@ const AnalysisCharts = ({ resultsByState, selectedStates }) => {
     );
 };
 
+// --- Retirement Analysis Component ---
+const RetirementAnalysis = ({ resultsByState, selectedStates }) => {
+  const [portfolioGrowthRate, setPortfolioGrowthRate] = useState(7);
+  const [currentAge, setCurrentAge] = useState(37);
+  const [retirementAge, setRetirementAge] = useState(50);
+  const [baseState, setBaseState] = useState(selectedStates[0] || '');
+
+  // Backsolver states
+  const [currentAssets, setCurrentAssets] = useState(100000);
+  const [baseAnnualSavings, setBaseAnnualSavings] = useState(25000);
+  const [fiNumber, setFiNumber] = useState(2000000);
+  const [swr, setSwr] = useState(4); // Safe withdrawal rate
+
+  useEffect(() => {
+    if (!selectedStates.includes(baseState) && selectedStates.length > 0) {
+      setBaseState(selectedStates[0]);
+    }
+  }, [selectedStates, baseState]);
+  
+  const yearsToProject = useMemo(() => Math.max(0, Number(retirementAge) - Number(currentAge)), [retirementAge, currentAge]);
+
+  const projectionData = useMemo(() => {
+    if (!baseState || !resultsByState[baseState]) return [];
+
+    const baseAnnualNetCash = (resultsByState[baseState].monthlyNetCash || 0) * 12;
+
+    return selectedStates.map(state => {
+      if (!resultsByState[state]) return null;
+
+      const stateAnnualNetCash = (resultsByState[state].monthlyNetCash || 0) * 12;
+      const annualDifference = stateAnnualNetCash - baseAnnualNetCash;
+
+      const rate = portfolioGrowthRate / 100;
+      let futureValue = 0;
+      let futureValueChartData = [];
+      for (let i = 1; i <= yearsToProject; i++) {
+        futureValue = (futureValue + annualDifference) * (1 + rate);
+        futureValueChartData.push({ year: Number(currentAge) + i, value: futureValue });
+      }
+
+      return {
+        state,
+        annualDifference,
+        futureValue,
+        chartData: futureValueChartData,
+      };
+    }).filter(Boolean);
+  }, [resultsByState, baseState, portfolioGrowthRate, currentAge, yearsToProject, selectedStates]);
+  
+  const backsolverCalculations = useMemo(() => {
+    if (!baseState || !resultsByState[baseState]) return { table: [], chart: [] };
+    
+    const rate = portfolioGrowthRate / 100;
+    const targetAssets = Number(fiNumber);
+    const baseStateAnnualNetCash = (resultsByState[baseState].monthlyNetCash || 0) * 12;
+
+    let maxYears = 0;
+    const tableData = [];
+    
+    for (const state of selectedStates) {
+        const stateAnnualNetCash = (resultsByState[state]?.monthlyNetCash || 0) * 12;
+        const cashDelta = stateAnnualNetCash - baseStateAnnualNetCash;
+        const totalAnnualContribution = Number(baseAnnualSavings) + cashDelta;
+
+        let years = Infinity;
+        if (totalAnnualContribution <= 0 && (Number(currentAssets) * rate) <= 0) {
+            years = Infinity;
+        } else {
+            if (rate > 0) {
+                const val1 = targetAssets * rate + totalAnnualContribution;
+                const val2 = Number(currentAssets) * rate + totalAnnualContribution;
+                if (val1 > 0 && val2 > 0) {
+                    years = Math.log(val1 / val2) / Math.log(1 + rate);
+                }
+            } else { // Handle 0% growth rate
+                if (totalAnnualContribution > 0) {
+                    years = (targetAssets - Number(currentAssets)) / totalAnnualContribution;
+                }
+            }
+        }
+        
+        const finalYears = years > 100 ? Infinity : years;
+        if (isFinite(finalYears)) {
+            maxYears = Math.max(maxYears, Math.ceil(finalYears));
+        }
+        tableData.push({ state, years: finalYears, totalAnnualContribution });
+    }
+
+    maxYears = Math.min(maxYears + 2, 50); // Add a buffer and cap at 50 years
+
+    const chartData = tableData.map(({ state, totalAnnualContribution }) => {
+        let series = [{ age: Number(currentAge), value: Number(currentAssets) }];
+        let assets = Number(currentAssets);
+        for (let i = 1; i <= maxYears; i++) {
+            assets = assets * (1 + rate) + totalAnnualContribution;
+            series.push({ age: Number(currentAge) + i, value: assets });
+            if (assets > targetAssets) break; // Stop charting after reaching FI
+        }
+        return { state, data: series };
+    });
+
+    return { table: tableData, chart: chartData, maxYears };
+  }, [resultsByState, selectedStates, currentAssets, fiNumber, portfolioGrowthRate, baseAnnualSavings, baseState]);
+
+  if (selectedStates.length < 1) {
+    return (
+      <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-200">
+        <h2 className="text-xl sm:text-2xl font-semibold text-gray-800 mb-4">Retirement Projection</h2>
+        <p className="text-gray-600">Please select at least one state to run retirement calculations.</p>
+      </div>
+    );
+  }
+
+  const annualRetirementIncome = Number(fiNumber) * (swr / 100);
+
+  return (
+    <div className="space-y-8">
+      {/* Savings Projection */}
+      <div className="bg-white p-4 sm:p-6 rounded-xl shadow-lg border border-gray-200">
+        <h2 className="text-xl sm:text-2xl font-semibold text-gray-800 border-b pb-3 mb-6">Retirement Savings Projection</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+          <InputField label="Current Age" value={currentAge} onChange={setCurrentAge} />
+          <InputField label="Target Retirement Age" value={retirementAge} onChange={setRetirementAge} />
+          <InputField label="Portfolio Growth Rate" value={portfolioGrowthRate} onChange={setPortfolioGrowthRate} isRate={true} />
+          <div className="w-full">
+            <label htmlFor="baseStateSelectRetire" className="block text-sm font-medium text-gray-700 mb-1">Compare Against</label>
+            <select id="baseStateSelectRetire" value={baseState} onChange={(e) => setBaseState(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md bg-white">
+              {selectedStates.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </div>
+        </div>
+
+        {selectedStates.length > 1 && (
+          <>
+            <h3 className="text-lg sm:text-xl font-semibold text-center mb-4 mt-8">Projected Additional Savings Growth by Age {retirementAge}</h3>
+            <ResponsiveContainer width="100%" height={400}>
+              <LineChart margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis type="number" dataKey="year" domain={[Number(currentAge), Number(retirementAge)]} tickFormatter={(tick) => `Age ${tick}`} />
+                <YAxis tickFormatter={(value) => formatCurrency(value, 0)} />
+                <Tooltip formatter={(value) => formatCurrency(value, 0)} />
+                <Legend />
+                <ReferenceLine y={0} stroke="#000" />
+                {projectionData.map((data, index) => (
+                  <Line key={data.state} type="monotone" dataKey="value" data={data.chartData} name={`${data.state} vs ${baseState}`} stroke={`hsl(${index * 60}, 70%, 50%)`} strokeWidth={2} dot={false} />
+                ))}
+              </LineChart>
+            </ResponsiveContainer>
+
+            <div className="overflow-x-auto mt-6">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">State</th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Annual Savings Difference</th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Potential Value at Age {retirementAge}</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {projectionData.map(data => (
+                    data.state !== baseState && <tr key={data.state}>
+                      <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{data.state}</td>
+                      <td className={`px-4 py-4 whitespace-nowrap text-sm text-right font-mono ${data.annualDifference > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        {formatCurrency(data.annualDifference)}
+                      </td>
+                      <td className={`px-4 py-4 whitespace-nowrap text-sm text-right font-mono ${data.futureValue > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        {formatCurrency(data.futureValue)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Backsolver */}
+      <div className="bg-white p-4 sm:p-6 rounded-xl shadow-lg border border-gray-200">
+        <h2 className="text-xl sm:text-2xl font-semibold text-gray-800 border-b pb-3 mb-6">Financial Independence Backsolver</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+          <InputField label="Current Assets" value={currentAssets} onChange={setCurrentAssets} />
+          <InputField label={`Base Annual Savings (in ${baseState})`} value={baseAnnualSavings} onChange={setBaseAnnualSavings} />
+          <InputField label="FI Target Amount" value={fiNumber} onChange={setFiNumber} />
+          <InputField label="Safe Withdrawal Rate" value={swr} onChange={setSwr} isRate={true} />
+        </div>
+        
+        <h3 className="text-lg sm:text-xl font-semibold text-center mb-4 mt-8">Path to Financial Independence</h3>
+        <ResponsiveContainer width="100%" height={400}>
+            <LineChart margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis type="number" dataKey="age" domain={['dataMin', 'dataMax']} tickFormatter={(tick) => `Age ${tick}`} allowDecimals={false} />
+                <YAxis tickFormatter={(value) => formatCurrency(value, 0)} />
+                <Tooltip formatter={(value, name) => [formatCurrency(value, 0), name]}/>
+                <Legend />
+                <ReferenceLine y={Number(fiNumber)} label={{ value: `FI Target: ${formatCurrency(fiNumber)}`, position: 'insideTopLeft' }} stroke="red" strokeDasharray="3 3" />
+                {backsolverCalculations.chart.map((series, index) => (
+                    <Line key={series.state} type="monotone" dataKey="value" data={series.data} name={series.state} stroke={`hsl(${index * 60}, 70%, 50%)`} strokeWidth={2} dot={false} />
+                ))}
+            </LineChart>
+        </ResponsiveContainer>
+
+        <div className="overflow-x-auto mt-6">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">State</th>
+                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Adjusted Annual Savings</th>
+                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Years to FI</th>
+                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Retirement Age</th>
+                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Est. Annual Income at FI</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {backsolverCalculations.table.map(res => (
+                <tr key={res.state}>
+                  <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{res.state}</td>
+                  <td className="px-4 py-4 whitespace-nowrap text-sm text-right font-mono">{formatCurrency(res.totalAnnualContribution)}</td>
+                  <td className="px-4 py-4 whitespace-nowrap text-sm text-right font-mono">{isFinite(res.years) ? res.years.toFixed(1) : 'Never'}</td>
+                  <td className="px-4 py-4 whitespace-nowrap text-sm text-right font-mono">{isFinite(res.years) ? (Number(currentAge) + res.years).toFixed(1) : 'N/A'}</td>
+                  <td className="px-4 py-4 whitespace-nowrap text-sm text-right font-mono">{formatCurrency(annualRetirementIncome)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="mt-3 text-xs text-gray-500">
+            <b>Years to FI</b> is the time it takes for your current assets, plus compounded annual savings, to reach your FI Target. Assumes a {portfolioGrowthRate}% portfolio growth rate.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+
 export default function TaxCalculator() {
+  const [activeView, setActiveView] = useState('comparison'); // 'comparison' or 'retirement'
+  const [showRentScenario, setShowRentScenario] = useState(true);
+
   const [income, setIncome] = useState(250000);
   const [stGains, setStGains] = useState(5000);
   const [ltGains, setLtGains] = useState(10000);
@@ -643,14 +895,14 @@ export default function TaxCalculator() {
   ];
 
   return (
-    <div className="bg-gray-50 min-h-screen font-sans p-4 sm:p-6 lg:p-8">
+    <div className="bg-gray-50 min-h-screen font-sans p-2 sm:p-6 lg:p-8">
       <div className="max-w-screen-2xl mx-auto">
         <header className="mb-8 text-center">
-          <h1 className="text-4xl font-bold text-gray-800">2026 Tax Scenario Comparator</h1>
+          <h1 className="text-3xl sm:text-4xl font-bold text-gray-800">2026 Tax Scenario Comparator</h1>
         </header>
-        <div className="grid grid-cols-1 xl:grid-cols-9 lg:grid-cols-8 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
           {/* Left Input Pane */}
-          <div className="lg:col-span-2 xl:col-span-2 bg-white p-6 rounded-xl shadow-lg border border-gray-200">
+          <div className="lg:col-span-4 xl:col-span-3 bg-white p-4 sm:p-6 rounded-xl shadow-lg border border-gray-200">
             <div className="space-y-5">
               <div className="p-4 border border-indigo-200 bg-indigo-50 rounded-lg">
                 <h3 className="text-xl font-semibold text-indigo-800 mb-3">Scenario Management</h3>
@@ -689,242 +941,263 @@ export default function TaxCalculator() {
                 <div className="grid grid-cols-2 gap-2">
                     {Object.keys(STATE_TAX_DATA).map(s => <StateCheckbox key={s} state={s} isSelected={selectedStates.includes(s)} onChange={handleStateSelection} />)}
                 </div>
+                <div className="mt-4">
+                  <label className="flex items-center space-x-2 p-2 rounded-md hover:bg-gray-100 cursor-pointer">
+                    <input type="checkbox" checked={showRentScenario} onChange={() => setShowRentScenario(prev => !prev)} className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
+                    <span className="text-sm font-medium text-gray-800">Show Rent Scenario</span>
+                  </label>
+                </div>
               </div>
             </div>
           </div>
           {/* Main Section */}
-          <div className="lg:col-span-6 xl:col-span-7 space-y-8">
-            {/* --- Original Main Comparison Table --- */}
-            <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-200">
-                <h2 className="text-2xl font-semibold text-gray-800 border-b pb-3 mb-6">State Comparison Summary (Buy Scenario)</h2>
-                <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
-                            <tr>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Metric</th>
-                                {selectedStates.map(state => <th key={state} className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">{state}</th>)}
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {metrics.map((metric) => (
-                                <React.Fragment key={metric.key}>
-                                    <tr className={expandedRows[metric.key] ? 'bg-indigo-50' : (metrics.indexOf(metric) % 2 === 0 ? 'bg-white' : 'bg-gray-50')}>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                                            {metric.expandable && (
-                                                <button onClick={() => toggleRow(metric.key)} className="mr-2 text-indigo-600">
-                                                    {expandedRows[metric.key] ? '[-]' : '[+]'}
-                                                </button>
-                                            )}
-                                            {metric.label}
-                                        </td>
-                                        {selectedStates.map(state => (
-                                            <td key={state} className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 text-right font-mono">
-                                                {metric.key === 'delta'
-                                                  ? formatCurrency((resultsByState[state]?.monthlyNetCash ?? 0) - (resultsByState[state]?.rent?.monthlyNetCash ?? 0))
-                                                  : metric.key.startsWith('rent.')
-                                                    ? formatCurrency(metric.key.split('.').reduce((a, b) => a?.[b], resultsByState[state]))
-                                                    : formatCurrency(resultsByState[state]?.[metric.key])}
-                                            </td>
-                                        ))}
-                                    </tr>
-                                    {metric.expandable && expandedRows[metric.key] && (
-                                        <>
-                                            {metric.key === 'totalTaxBurden' && (
-                                                <>
-                                                    <tr className="bg-gray-100"><td className="pl-12 pr-6 py-2 text-sm text-gray-600">Federal Tax</td>{selectedStates.map(s => <td key={s} className="px-6 py-2 text-right font-mono text-sm">{formatCurrency(resultsByState[s]?.totalFederalTax - resultsByState[s]?.niit)}</td>)}</tr>
-                                                    <tr className="bg-gray-100"><td className="pl-12 pr-6 py-2 text-sm text-gray-600">NIIT</td>{selectedStates.map(s => <td key={s} className="px-6 py-2 text-right font-mono text-sm">{formatCurrency(resultsByState[s]?.niit)}</td>)}</tr>
-                                                    <tr className="bg-gray-100"><td className="pl-12 pr-6 py-2 text-sm text-gray-600">FICA</td>{selectedStates.map(s => <td key={s} className="px-6 py-2 text-right font-mono text-sm">{formatCurrency(resultsByState[s]?.ficaTax)}</td>)}</tr>
-                                                    <tr className="bg-gray-100"><td className="pl-12 pr-6 py-2 text-sm text-gray-600">State Tax</td>{selectedStates.map(s => <td key={s} className="px-6 py-2 text-right font-mono text-sm">{formatCurrency(resultsByState[s]?.stateTax)}</td>)}</tr>
-                                                    <tr className="bg-gray-100"><td className="pl-12 pr-6 py-2 text-sm text-gray-600">Local Tax</td>{selectedStates.map(s => <td key={s} className="px-6 py-2 text-right font-mono text-sm">{formatCurrency(resultsByState[s]?.localTax)}</td>)}</tr>
-                                                    <tr className="bg-gray-100"><td className="pl-12 pr-6 py-2 text-sm text-gray-600">CA SDI Tax</td>{selectedStates.map(s => <td key={s} className="px-6 py-2 text-right font-mono text-sm">{formatCurrency(resultsByState[s]?.sdiTax)}</td>)}</tr>
-                                                </>
-                                            )}
-                                            {metric.key === 'deductionToUse' && (
-                                                 <>
-                                                    <tr className="bg-gray-100"><td className="pl-12 pr-6 py-2 text-sm text-gray-600 font-semibold">Itemized Total</td>{selectedStates.map(s => <td key={s} className="px-6 py-2 text-right font-mono text-sm font-semibold">{formatCurrency(resultsByState[s]?.itemized.mortgageInterest + resultsByState[s]?.itemized.salt + resultsByState[s]?.itemized.other)}</td>)}</tr>
-                                                    <tr className="bg-gray-100"><td className="pl-16 pr-6 py-2 text-sm text-gray-500">Mortgage Interest</td>{selectedStates.map(s => <td key={s} className="px-6 py-2 text-right font-mono text-sm">{formatCurrency(resultsByState[s]?.itemized.mortgageInterest)}</td>)}</tr>
-                                                    <tr className="bg-gray-100"><td className="pl-16 pr-6 py-2 text-sm text-gray-500">
-                                                        <button onClick={() => toggleRow('saltDetail')} className="mr-2 text-indigo-600 text-xs">{expandedRows['saltDetail'] ? '[-]' : '[+]'}</button>
-                                                        SALT (Capped)
-                                                    </td>{selectedStates.map(s => <td key={s} className="px-6 py-2 text-right font-mono text-sm">{formatCurrency(resultsByState[s]?.itemized.salt)}</td>)}</tr>
-                                                    {expandedRows['saltDetail'] && (
-                                                        <>
-                                                            <tr className="bg-gray-200"><td className="pl-20 pr-6 py-1 text-xs text-gray-500">State Income Tax</td>{selectedStates.map(s => <td key={s} className="px-6 py-1 text-right font-mono text-xs">{formatCurrency(resultsByState[s]?.itemized.stateIncomeTax)}</td>)}</tr>
-                                                            <tr className="bg-gray-200"><td className="pl-20 pr-6 py-1 text-xs text-gray-500">Property Tax</td>{selectedStates.map(s => <td key={s} className="px-6 py-1 text-right font-mono text-xs">{formatCurrency(resultsByState[s]?.itemized.propertyTax)}</td>)}</tr>
-                                                            <tr className="bg-gray-200"><td className="pl-20 pr-6 py-1 text-xs text-gray-500">Local Tax</td>{selectedStates.map(s => <td key={s} className="px-6 py-1 text-right font-mono text-xs">{formatCurrency(resultsByState[s]?.localTax)}</td>)}</tr>
-                                                            <tr className="bg-gray-200"><td className="pl-20 pr-6 py-1 text-xs text-gray-500">CA SDI Tax</td>{selectedStates.map(s => <td key={s} className="px-6 py-1 text-right font-mono text-xs">{formatCurrency(resultsByState[s]?.sdiTax)}</td>)}</tr>
-                                                        </>
-                                                    )}
-                                                    <tr className="bg-gray-100"><td className="pl-16 pr-6 py-2 text-sm text-gray-500">Other</td>{selectedStates.map(s => <td key={s} className="px-6 py-2 text-right font-mono text-sm">{formatCurrency(resultsByState[s]?.itemized.other)}</td>)}</tr>
-                                                    <tr className="bg-gray-100"><td className="pl-12 pr-6 py-2 text-sm text-gray-600 font-semibold">State Standard</td>{selectedStates.map(s => <td key={s} className="px-6 py-2 text-right font-mono text-sm font-semibold">{formatCurrency(resultsByState[s]?.stateStandardDed)}</td>)}</tr>
-                                                </>
-                                            )}
-                                        </>
-                                    )}
-                                </React.Fragment>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-                {selectedStates.length === 0 && (<div className="text-center py-10 text-gray-500"><p>Please select one or more states to see a comparison.</p></div>)}
+          <div className="lg:col-span-8 xl:col-span-9 space-y-8">
+            <div className="border-b border-gray-200">
+              <nav className="-mb-px flex space-x-2 sm:space-x-6">
+                <TabButton label="State Comparison" isActive={activeView === 'comparison'} onClick={() => setActiveView('comparison')} />
+                <TabButton label="Retirement Analysis" isActive={activeView === 'retirement'} onClick={() => setActiveView('retirement')} />
+              </nav>
             </div>
-            
-            {/* --- State-specific Details Panel --- */}
-            {selectedStates.length > 0 && (
-              <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-200">
-                <h2 className="text-2xl font-semibold text-gray-800 border-b pb-3 mb-6">State-Specific Details</h2>
-                <div className="flex overflow-x-auto space-x-2 sm:space-x-4 pb-4 -mx-2 sm:-mx-6 px-2 sm:px-6">
-                  {selectedStates.map(state => {
-                    const isExpanded = expandedSchedules[state] || false;
-                       const displaySchedule = getInterestSchedule({
-                      amount: Number(stateInputs[state]?.mortgageAmount) || 0,
-                      annualRate: Number(stateInputs[state]?.mortgageRate) || 0,
-                      years: 10,  });
-                    return (
-                      <div key={state} className="p-2 sm:p-4 border border-gray-200 rounded-lg flex-shrink-0 w-56 md:w-64 bg-gray-50 shadow-sm">
-                        <h4 className="text-base sm:text-lg font-semibold text-indigo-700 mb-4 text-center">{state}</h4>
-                        <div className="space-y-2 sm:space-y-3">
-                          <div>
-                            <label className="block text-xs font-medium text-gray-600 mb-1">Mortgage Amount</label>
-                            <div className="relative"><span className="absolute inset-y-0 left-0 pl-2 flex items-center text-gray-500 text-xs">$</span><input type="number" value={stateInputs[state]?.mortgageAmount || ''} onChange={(e) => handleStateInputChange(state, 'mortgageAmount', e.target.value)} className="w-full pl-5 pr-2 py-1 text-xs sm:text-sm bg-white border border-gray-300 rounded-md shadow-sm"/></div>
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-gray-600 mb-1">Mortgage Interest Rate</label>
-                            <div className="relative"><input type="number" value={stateInputs[state]?.mortgageRate || ''} onChange={(e) => handleStateInputChange(state, 'mortgageRate', e.target.value)} className="w-full px-2 py-1 text-xs sm:text-sm bg-white border border-gray-300 rounded-md shadow-sm"/><span className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-500 text-xs">%</span></div>
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-gray-600 mb-1">Annual Property Tax</label>
-                            <div className="relative"><span className="absolute inset-y-0 left-0 pl-2 flex items-center text-gray-500 text-xs">$</span><input type="number" value={stateInputs[state]?.propertyTax || ''} onChange={(e) => handleStateInputChange(state, 'propertyTax', e.target.value)} className="w-full pl-5 pr-2 py-1 text-xs sm:text-sm bg-white border border-gray-300 rounded-md shadow-sm"/></div>
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-gray-600 mb-1">Annual Home Insurance</label>
-                            <div className="relative"><span className="absolute inset-y-0 left-0 pl-2 flex items-center text-gray-500 text-xs">$</span><input type="number" value={stateInputs[state]?.homeInsurance || ''} onChange={(e) => handleStateInputChange(state, 'homeInsurance', e.target.value)} className="w-full pl-5 pr-2 py-1 text-xs sm:text-sm bg-white border border-gray-300 rounded-md shadow-sm"/></div>
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-gray-600 mb-1">Estimated Monthly Rent</label>
-                            <div className="relative">
-                              <span className="absolute inset-y-0 left-0 pl-2 flex items-center text-gray-500 text-xs">$</span>
-                              <input type="number" value={stateInputs[state]?.monthlyRent || ''} onChange={(e) => handleStateInputChange(state, 'monthlyRent', e.target.value)} className="w-full pl-5 pr-2 py-1 text-xs sm:text-sm bg-white border border-gray-300 rounded-md shadow-sm"/>
-                            </div>
-                          </div>
-                          {STATES_WITH_LOCAL_TAX.includes(state) && (
-                            <div>
-                              <label className="block text-xs font-medium text-gray-600 mb-1">Est. Local Income Tax Rate</label>
-                              <div className="relative"><input type="number" value={stateInputs[state]?.localTaxRate || ''} onChange={(e) => handleStateInputChange(state, 'localTaxRate', e.target.value)} className="w-full px-2 py-1 text-xs sm:text-sm bg-white border border-gray-300 rounded-md shadow-sm"/><span className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-500 text-xs">%</span></div>
-                            </div>
-                          )}
-                        </div>
-                        <div className="mt-2 sm:mt-4 pt-2 sm:pt-4 border-t border-gray-200">
-                          <p className="text-xs sm:text-sm font-medium text-gray-600">Est. Monthly Housing Cost (PITI)</p>
-                          <p className="text-lg sm:text-2xl font-bold text-gray-800">
-                            {formatCurrency(calculateMonthlyHousingCost(
-                              stateInputs[state]?.mortgageAmount,
-                              stateInputs[state]?.mortgageRate,
-                              stateInputs[state]?.propertyTax,
-                              stateInputs[state]?.homeInsurance
-                            ))}
-                          </p>
-                        </div>
-                        {/* --- Interest Schedule Table: Years 2-10 --- */}
-                        <div className="mt-4 border-t pt-4">
-                          <button
-                            className="flex items-center text-xs font-semibold text-indigo-700 mb-2 hover:underline"
-                            onClick={() =>
-                              setExpandedSchedules(prev => ({ ...prev, [state]: !isExpanded }))
-                            }
-                          >
-                            {isExpanded ? '[-]' : '[+]'} First 10 Years: Deduction Phaseout Impact
-                          </button>
-                          {isExpanded && (
-                            <>
-                              <table className="min-w-full text-xs border">
-                                <thead>
-                                  <tr>
-                                    <th className="px-2 py-1 border-b text-left">Year</th>
-                                    <th className="px-2 py-1 border-b text-right">Interest</th>
-                                    <th className="px-2 py-1 border-b text-right">$ Impact</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {displaySchedule.slice(1, 10).map((row, idx) => {
-                                    // Match up with perStateInterestSchedules[state][idx] (years 2-10 are indices 0-8)
-                                    const impact = perStateInterestSchedules[state]?.[idx]?.impact;
-                                    return (
-                                      <tr key={row.year}>
-                                        <td className="px-2 py-1">{row.year}</td>
-                                        <td className="px-2 py-1 text-right">{formatCurrency(row.interest)}</td>
-                                        <td className={`px-2 py-1 text-right ${
-                                          impact < 0 ? 'text-red-700' : impact > 0 ? 'text-green-700' : ''
-                                        }`}>
-                                          {impact === 0 || impact == null ? '-' : formatCurrency(impact)}
-                                        </td>
-                                      </tr>
-                                    );
-                                  })}
-                                </tbody>
-                              </table>
-                              <p className="mt-1 text-xxs text-gray-500">
-                                Year 1 not shown (highest deduction). Each following year, as eligible mortgage interest falls, your deduction drops and monthly take-home pay typically decreases. "$ Impact" is the change in average monthly take-home pay vs. original scenario, including both federal and state deduction loss.
-                              </p>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
+
+            {activeView === 'comparison' && (
+              <>
+                {/* --- Original Main Comparison Table --- */}
+                <div className="bg-white p-4 sm:p-6 rounded-xl shadow-lg border border-gray-200">
+                    <h2 className="text-xl sm:text-2xl font-semibold text-gray-800 border-b pb-3 mb-6">State Comparison Summary (Buy Scenario)</h2>
+                    <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-gray-200">
+                            <thead className="bg-gray-50">
+                                <tr>
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Metric</th>
+                                    {selectedStates.map(state => <th key={state} className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">{state}</th>)}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {metrics.map((metric) => (
+                                    <React.Fragment key={metric.key}>
+                                        <tr className={expandedRows[metric.key] ? 'bg-indigo-50' : (metrics.indexOf(metric) % 2 === 0 ? 'bg-white' : 'bg-gray-50')}>
+                                            <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                                {metric.expandable && (
+                                                    <button onClick={() => toggleRow(metric.key)} className="mr-2 text-indigo-600">
+                                                        {expandedRows[metric.key] ? '[-]' : '[+]'}
+                                                    </button>
+                                                )}
+                                                {metric.label}
+                                            </td>
+                                            {selectedStates.map(state => (
+                                                <td key={state} className="px-4 py-4 whitespace-nowrap text-sm text-gray-700 text-right font-mono">
+                                                    {metric.key === 'delta'
+                                                      ? formatCurrency((resultsByState[state]?.monthlyNetCash ?? 0) - (resultsByState[state]?.rent?.monthlyNetCash ?? 0))
+                                                      : metric.key.startsWith('rent.')
+                                                        ? formatCurrency(metric.key.split('.').reduce((a, b) => a?.[b], resultsByState[state]))
+                                                        : formatCurrency(resultsByState[state]?.[metric.key])}
+                                                </td>
+                                            ))}
+                                        </tr>
+                                        {metric.expandable && expandedRows[metric.key] && (
+                                            <>
+                                                {metric.key === 'totalTaxBurden' && (
+                                                    <>
+                                                        <tr className="bg-gray-100"><td className="pl-12 pr-4 py-2 text-sm text-gray-600">Federal Tax</td>{selectedStates.map(s => <td key={s} className="px-4 py-2 text-right font-mono text-sm">{formatCurrency(resultsByState[s]?.totalFederalTax - resultsByState[s]?.niit)}</td>)}</tr>
+                                                        <tr className="bg-gray-100"><td className="pl-12 pr-4 py-2 text-sm text-gray-600">NIIT</td>{selectedStates.map(s => <td key={s} className="px-4 py-2 text-right font-mono text-sm">{formatCurrency(resultsByState[s]?.niit)}</td>)}</tr>
+                                                        <tr className="bg-gray-100"><td className="pl-12 pr-4 py-2 text-sm text-gray-600">FICA</td>{selectedStates.map(s => <td key={s} className="px-4 py-2 text-right font-mono text-sm">{formatCurrency(resultsByState[s]?.ficaTax)}</td>)}</tr>
+                                                        <tr className="bg-gray-100"><td className="pl-12 pr-4 py-2 text-sm text-gray-600">State Tax</td>{selectedStates.map(s => <td key={s} className="px-4 py-2 text-right font-mono text-sm">{formatCurrency(resultsByState[s]?.stateTax)}</td>)}</tr>
+                                                        <tr className="bg-gray-100"><td className="pl-12 pr-4 py-2 text-sm text-gray-600">Local Tax</td>{selectedStates.map(s => <td key={s} className="px-4 py-2 text-right font-mono text-sm">{formatCurrency(resultsByState[s]?.localTax)}</td>)}</tr>
+                                                        <tr className="bg-gray-100"><td className="pl-12 pr-4 py-2 text-sm text-gray-600">CA SDI Tax</td>{selectedStates.map(s => <td key={s} className="px-4 py-2 text-right font-mono text-sm">{formatCurrency(resultsByState[s]?.sdiTax)}</td>)}</tr>
+                                                    </>
+                                                )}
+                                                {metric.key === 'deductionToUse' && (
+                                                     <>
+                                                        <tr className="bg-gray-100"><td className="pl-12 pr-4 py-2 text-sm text-gray-600 font-semibold">Itemized Total</td>{selectedStates.map(s => <td key={s} className="px-4 py-2 text-right font-mono text-sm font-semibold">{formatCurrency(resultsByState[s]?.itemized.mortgageInterest + resultsByState[s]?.itemized.salt + resultsByState[s]?.itemized.other)}</td>)}</tr>
+                                                        <tr className="bg-gray-100"><td className="pl-16 pr-4 py-2 text-sm text-gray-500">Mortgage Interest</td>{selectedStates.map(s => <td key={s} className="px-4 py-2 text-right font-mono text-sm">{formatCurrency(resultsByState[s]?.itemized.mortgageInterest)}</td>)}</tr>
+                                                        <tr className="bg-gray-100"><td className="pl-16 pr-4 py-2 text-sm text-gray-500">
+                                                            <button onClick={() => toggleRow('saltDetail')} className="mr-2 text-indigo-600 text-xs">{expandedRows['saltDetail'] ? '[-]' : '[+]'}</button>
+                                                            SALT (Capped)
+                                                        </td>{selectedStates.map(s => <td key={s} className="px-4 py-2 text-right font-mono text-sm">{formatCurrency(resultsByState[s]?.itemized.salt)}</td>)}</tr>
+                                                        {expandedRows['saltDetail'] && (
+                                                            <>
+                                                                <tr className="bg-gray-200"><td className="pl-20 pr-4 py-1 text-xs text-gray-500">State Income Tax</td>{selectedStates.map(s => <td key={s} className="px-4 py-1 text-right font-mono text-xs">{formatCurrency(resultsByState[s]?.itemized.stateIncomeTax)}</td>)}</tr>
+                                                                <tr className="bg-gray-200"><td className="pl-20 pr-4 py-1 text-xs text-gray-500">Property Tax</td>{selectedStates.map(s => <td key={s} className="px-4 py-1 text-right font-mono text-xs">{formatCurrency(resultsByState[s]?.itemized.propertyTax)}</td>)}</tr>
+                                                                <tr className="bg-gray-200"><td className="pl-20 pr-4 py-1 text-xs text-gray-500">Local Tax</td>{selectedStates.map(s => <td key={s} className="px-4 py-1 text-right font-mono text-xs">{formatCurrency(resultsByState[s]?.localTax)}</td>)}</tr>
+                                                                <tr className="bg-gray-200"><td className="pl-20 pr-4 py-1 text-xs text-gray-500">CA SDI Tax</td>{selectedStates.map(s => <td key={s} className="px-4 py-1 text-right font-mono text-xs">{formatCurrency(resultsByState[s]?.sdiTax)}</td>)}</tr>
+                                                            </>
+                                                        )}
+                                                        <tr className="bg-gray-100"><td className="pl-16 pr-4 py-2 text-sm text-gray-500">Other</td>{selectedStates.map(s => <td key={s} className="px-4 py-2 text-right font-mono text-sm">{formatCurrency(resultsByState[s]?.itemized.other)}</td>)}</tr>
+                                                        <tr className="bg-gray-100"><td className="pl-12 pr-4 py-2 text-sm text-gray-600 font-semibold">State Standard</td>{selectedStates.map(s => <td key={s} className="px-4 py-2 text-right font-mono text-sm font-semibold">{formatCurrency(resultsByState[s]?.stateStandardDed)}</td>)}</tr>
+                                                    </>
+                                                )}
+                                            </>
+                                        )}
+                                    </React.Fragment>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                    {selectedStates.length === 0 && (<div className="text-center py-10 text-gray-500"><p>Please select one or more states to see a comparison.</p></div>)}
                 </div>
-              </div>
-            )}
-            {/* --- AnalysisCharts and Rent vs Buy Table unchanged... */}
-            {selectedStates.length > 0 && <AnalysisCharts resultsByState={resultsByState} selectedStates={selectedStates} />}
-            {selectedStates.length > 0 && (
-              <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-200 mt-8">
-                <h2 className="text-2xl font-semibold text-gray-800 border-b pb-3 mb-6">
-                  Rent vs. Buy: Net Mortgage Cost After Tax Savings
-                </h2>
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">State</th>
-                        <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Monthly PITI</th>
-                        <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Monthly Tax Savings</th>
-                        <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Net Mortgage Cost</th>
-                        <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Estimated Rent</th>
-                        <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Cash Delta</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {selectedStates.map((state) => {
-                        const piti = resultsByState[state]?.monthlyHousingCost ?? 0;
-                        const taxSavings =
-                          (resultsByState[state]?.monthlyTakeHome ?? 0) -
-                          (resultsByState[state]?.rent?.monthlyTakeHome ?? 0);
-                        const netMortgageCost = piti - taxSavings;
-                        const rent = resultsByState[state]?.rent?.monthlyHousingCost ?? Number(stateInputs[state]?.monthlyRent ?? 0);
-                        const cashDelta = netMortgageCost - rent;
+                
+                {/* --- State-specific Details Panel --- */}
+                {selectedStates.length > 0 && (
+                  <div className="bg-white p-4 sm:p-6 rounded-xl shadow-lg border border-gray-200">
+                    <h2 className="text-xl sm:text-2xl font-semibold text-gray-800 border-b pb-3 mb-6">State-Specific Details</h2>
+                    <div className="flex overflow-x-auto space-x-4 pb-4 -mx-4 sm:-mx-6 px-4 sm:px-6">
+                      {selectedStates.map(state => {
+                        const isExpanded = expandedSchedules[state] || false;
+                           const displaySchedule = getInterestSchedule({
+                          amount: Number(stateInputs[state]?.mortgageAmount) || 0,
+                          annualRate: Number(stateInputs[state]?.mortgageRate) || 0,
+                          years: 10,  });
                         return (
-                          <tr key={state} className={cashDelta > 0 ? 'bg-red-50' : cashDelta < 0 ? 'bg-green-50' : ''}>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{state}</td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 text-right font-mono">{formatCurrency(piti)}</td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 text-right font-mono">{formatCurrency(taxSavings)}</td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 text-right font-mono">{formatCurrency(netMortgageCost)}</td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 text-right font-mono">{formatCurrency(rent)}</td>
-                            <td className={`px-6 py-4 whitespace-nowrap text-sm text-right font-mono ${cashDelta > 0 ? 'text-red-700' : cashDelta < 0 ? 'text-green-700' : ''}`}>
-                              {formatCurrency(cashDelta)}
-                            </td>
-                          </tr>
+                          <div key={state} className="p-4 border border-gray-200 rounded-lg flex-shrink-0 w-64 sm:w-72 bg-gray-50 shadow-sm">
+                            <h4 className="text-lg font-semibold text-indigo-700 mb-4 text-center">{state}</h4>
+                            <div className="space-y-3">
+                              <div>
+                                <label className="block text-xs font-medium text-gray-600 mb-1">Mortgage Amount</label>
+                                <div className="relative"><span className="absolute inset-y-0 left-0 pl-2 flex items-center text-gray-500 text-sm">$</span><input type="number" value={stateInputs[state]?.mortgageAmount || ''} onChange={(e) => handleStateInputChange(state, 'mortgageAmount', e.target.value)} className="w-full pl-5 pr-2 py-1 text-sm bg-white border border-gray-300 rounded-md shadow-sm"/></div>
+                              </div>
+                              <div>
+                                <label className="block text-xs font-medium text-gray-600 mb-1">Mortgage Interest Rate</label>
+                                <div className="relative"><input type="number" value={stateInputs[state]?.mortgageRate || ''} onChange={(e) => handleStateInputChange(state, 'mortgageRate', e.target.value)} className="w-full px-2 py-1 text-sm bg-white border border-gray-300 rounded-md shadow-sm"/><span className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-500 text-sm">%</span></div>
+                              </div>
+                              <div>
+                                <label className="block text-xs font-medium text-gray-600 mb-1">Annual Property Tax</label>
+                                <div className="relative"><span className="absolute inset-y-0 left-0 pl-2 flex items-center text-gray-500 text-sm">$</span><input type="number" value={stateInputs[state]?.propertyTax || ''} onChange={(e) => handleStateInputChange(state, 'propertyTax', e.target.value)} className="w-full pl-5 pr-2 py-1 text-sm bg-white border border-gray-300 rounded-md shadow-sm"/></div>
+                              </div>
+                              <div>
+                                <label className="block text-xs font-medium text-gray-600 mb-1">Annual Home Insurance</label>
+                                <div className="relative"><span className="absolute inset-y-0 left-0 pl-2 flex items-center text-gray-500 text-sm">$</span><input type="number" value={stateInputs[state]?.homeInsurance || ''} onChange={(e) => handleStateInputChange(state, 'homeInsurance', e.target.value)} className="w-full pl-5 pr-2 py-1 text-sm bg-white border border-gray-300 rounded-md shadow-sm"/></div>
+                              </div>
+                              {showRentScenario && (
+                                <div>
+                                  <label className="block text-xs font-medium text-gray-600 mb-1">Estimated Monthly Rent</label>
+                                  <div className="relative">
+                                    <span className="absolute inset-y-0 left-0 pl-2 flex items-center text-gray-500 text-sm">$</span>
+                                    <input type="number" value={stateInputs[state]?.monthlyRent || ''} onChange={(e) => handleStateInputChange(state, 'monthlyRent', e.target.value)} className="w-full pl-5 pr-2 py-1 text-sm bg-white border border-gray-300 rounded-md shadow-sm"/>
+                                  </div>
+                                </div>
+                              )}
+                              {STATES_WITH_LOCAL_TAX.includes(state) && (
+                                <div>
+                                  <label className="block text-xs font-medium text-gray-600 mb-1">Est. Local Income Tax Rate</label>
+                                  <div className="relative"><input type="number" value={stateInputs[state]?.localTaxRate || ''} onChange={(e) => handleStateInputChange(state, 'localTaxRate', e.target.value)} className="w-full px-2 py-1 text-sm bg-white border border-gray-300 rounded-md shadow-sm"/><span className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-500 text-sm">%</span></div>
+                                </div>
+                              )}
+                            </div>
+                            <div className="mt-4 pt-4 border-t border-gray-200">
+                              <p className="text-sm font-medium text-gray-600">Est. Monthly Housing Cost (PITI)</p>
+                              <p className="text-xl sm:text-2xl font-bold text-gray-800">
+                                {formatCurrency(calculateMonthlyHousingCost(
+                                  stateInputs[state]?.mortgageAmount,
+                                  stateInputs[state]?.mortgageRate,
+                                  stateInputs[state]?.propertyTax,
+                                  stateInputs[state]?.homeInsurance
+                                ))}
+                              </p>
+                            </div>
+                            {/* --- Interest Schedule Table: Years 2-10 --- */}
+                            <div className="mt-4 border-t pt-4">
+                              <button
+                                className="flex items-center text-xs font-semibold text-indigo-700 mb-2 hover:underline"
+                                onClick={() =>
+                                  setExpandedSchedules(prev => ({ ...prev, [state]: !isExpanded }))
+                                }
+                              >
+                                {isExpanded ? '[-]' : '[+]'} First 10 Years: Deduction Phaseout Impact
+                              </button>
+                              {isExpanded && (
+                                <>
+                                  <table className="min-w-full text-xs border">
+                                    <thead>
+                                      <tr>
+                                        <th className="px-2 py-1 border-b text-left">Year</th>
+                                        <th className="px-2 py-1 border-b text-right">Interest</th>
+                                        <th className="px-2 py-1 border-b text-right">$ Impact</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {displaySchedule.slice(1, 10).map((row, idx) => {
+                                        // Match up with perStateInterestSchedules[state][idx] (years 2-10 are indices 0-8)
+                                        const impact = perStateInterestSchedules[state]?.[idx]?.impact;
+                                        return (
+                                          <tr key={row.year}>
+                                            <td className="px-2 py-1">{row.year}</td>
+                                            <td className="px-2 py-1 text-right">{formatCurrency(row.interest)}</td>
+                                            <td className={`px-2 py-1 text-right ${
+                                              impact < 0 ? 'text-red-700' : impact > 0 ? 'text-green-700' : ''
+                                            }`}>
+                                              {impact === 0 || impact == null ? '-' : formatCurrency(impact)}
+                                            </td>
+                                          </tr>
+                                        );
+                                      })}
+                                    </tbody>
+                                  </table>
+                                  <p className="mt-1 text-xxs text-gray-500">
+                                    "$ Impact" is the change in avg. monthly take-home pay vs. Year 1.
+                                  </p>
+                                </>
+                              )}
+                            </div>
+                          </div>
                         );
                       })}
-                    </tbody>
-                  </table>
-                </div>
-                <p className="mt-3 text-xs text-gray-500">
-                  <b>Monthly Tax Savings</b> = Increase in take-home pay from mortgage/property tax deductions.<br />
-                  <b>Net Mortgage Cost</b> = PITI - Monthly Tax Savings.<br />
-                  <b>Cash Delta</b> = Net Mortgage Cost minus Rent. Positive = Buying is more expensive; Negative = Buying is cheaper.
-                </p>
-              </div>
+                    </div>
+                  </div>
+                )}
+                {/* --- AnalysisCharts and Rent vs Buy Table unchanged... */}
+                {selectedStates.length > 0 && <AnalysisCharts resultsByState={resultsByState} selectedStates={selectedStates} />}
+                {selectedStates.length > 0 && showRentScenario && (
+                  <div className="bg-white p-4 sm:p-6 rounded-xl shadow-lg border border-gray-200 mt-8">
+                    <h2 className="text-xl sm:text-2xl font-semibold text-gray-800 border-b pb-3 mb-6">
+                      Rent vs. Buy: Net Mortgage Cost After Tax Savings
+                    </h2>
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">State</th>
+                            <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Monthly PITI</th>
+                            <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Tax Savings</th>
+                            <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Net Cost</th>
+                            <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Rent</th>
+                            <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Delta</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {selectedStates.map((state) => {
+                            const piti = resultsByState[state]?.monthlyHousingCost ?? 0;
+                            const taxSavings =
+                              (resultsByState[state]?.monthlyTakeHome ?? 0) -
+                              (resultsByState[state]?.rent?.monthlyTakeHome ?? 0);
+                            const netMortgageCost = piti - taxSavings;
+                            const rent = resultsByState[state]?.rent?.monthlyHousingCost ?? Number(stateInputs[state]?.monthlyRent ?? 0);
+                            const cashDelta = netMortgageCost - rent;
+                            return (
+                              <tr key={state} className={cashDelta > 0 ? 'bg-red-50' : cashDelta < 0 ? 'bg-green-50' : ''}>
+                                <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{state}</td>
+                                <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700 text-right font-mono">{formatCurrency(piti)}</td>
+                                <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700 text-right font-mono">{formatCurrency(taxSavings)}</td>
+                                <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700 text-right font-mono">{formatCurrency(netMortgageCost)}</td>
+                                <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700 text-right font-mono">{formatCurrency(rent)}</td>
+                                <td className={`px-4 py-4 whitespace-nowrap text-sm text-right font-mono ${cashDelta > 0 ? 'text-red-700' : cashDelta < 0 ? 'text-green-700' : ''}`}>
+                                  {formatCurrency(cashDelta)}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                    <p className="mt-3 text-xs text-gray-500">
+                      <b>Cash Delta</b> = Net Mortgage Cost minus Rent. Positive means buying is more expensive monthly.
+                    </p>
+                  </div>
+                )}
+              </>
+            )}
+
+            {activeView === 'retirement' && (
+              <RetirementAnalysis resultsByState={resultsByState} selectedStates={selectedStates} />
             )}
           </div>
         </div>
