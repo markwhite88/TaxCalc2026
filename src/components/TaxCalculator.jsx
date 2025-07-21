@@ -18,6 +18,7 @@ const CA_MORTGAGE_DEBT_LIMIT = 1000000;
 const CA_SDI_RATE = 0.013;
 const NIIT_RATE = 0.038;
 const NIIT_THRESHOLD_MFJ = 250000;
+const HOME_CAPITAL_GAINS_EXCLUSION_MFJ = 500000; // Capital gains exclusion for married couples
 
 const STATE_STANDARD_DEDUCTIONS_MFJ = {
     'California': 10404, 'North Carolina': 25500,
@@ -138,6 +139,146 @@ function calcStateMonthlyTakeHomeDelta({
     const origStateTax = calculateTax(stateTaxableIncomeOrig, stateTaxBrackets) + (sdiTax || 0) + (localTax || 0);
     const newStateTax = calculateTax(stateTaxableIncomeNew, stateTaxBrackets) + (sdiTax || 0) + (localTax || 0);
     return (origStateTax - newStateTax) / 12;
+}
+
+// --- Updated Function for Home Value Projection and Break-Even Analysis ---
+function calculateHomeValueProjection({
+    purchasePrice,
+    mortgageAmount,
+    mortgageRate,
+    annualAppreciationRate,
+    years,
+    closingCostsBuying,
+    closingCostsSelling,
+    propertyTaxRate,
+    insuranceAnnual,
+    maintenanceRate,
+    rent,
+    state
+}) {
+    const projections = [];
+    const monthlyRent = Number(rent) || 0;
+    const annualRent = monthlyRent * 12;
+    const downPayment = purchasePrice - mortgageAmount;
+
+    // Initial costs when buying
+    const closingCostsBuyingAmount = purchasePrice * (closingCostsBuying / 100);
+    const initialInvestment = downPayment + closingCostsBuyingAmount;
+
+    // Calculate monthly mortgage payment
+    const monthlyRate = mortgageRate / 100 / 12;
+    const numberOfPayments = 30 * 12;
+    const monthlyMortgagePI = mortgageAmount * (monthlyRate * Math.pow(1 + monthlyRate, numberOfPayments)) / (Math.pow(1 + monthlyRate, numberOfPayments) - 1);
+
+    // Annual costs
+    const annualPropertyTax = purchasePrice * (propertyTaxRate / 100);
+    const annualMaintenance = purchasePrice * (maintenanceRate / 100);
+    const annualHousingCost = (monthlyMortgagePI * 12) + annualPropertyTax + insuranceAnnual + annualMaintenance;
+
+    // Track remaining mortgage balance
+    let mortgageBalance = mortgageAmount;
+    let homeValue = purchasePrice;
+    let totalRentPaid = 0;
+    let totalHousingCost = 0; // Don't include initial investment in housing costs
+    let breakEvenYear = null;
+
+    const stateTaxBrackets = STATE_TAX_DATA[state] || [];
+    const capitalGainsTaxRate = 0.15; // Assume 15% LTCG rate for simplicity
+
+    for (let year = 1; year <= years; year++) {
+        // Calculate appreciation
+        homeValue = homeValue * (1 + annualAppreciationRate / 100);
+
+        // Calculate interest and principal for the year
+        let yearlyInterest = 0;
+        let yearlyPrincipal = 0;
+
+        for (let month = 1; month <= 12; month++) {
+            if (mortgageBalance <= 0) break;
+            const monthlyInterest = mortgageBalance * monthlyRate;
+            yearlyInterest += monthlyInterest;
+            const monthlyPrincipal = monthlyMortgagePI - monthlyInterest;
+            yearlyPrincipal += monthlyPrincipal;
+            mortgageBalance -= monthlyPrincipal;
+        }
+
+        // Calculate equity
+        const equity = homeValue - Math.max(0, mortgageBalance);
+
+        // Annual housing costs (excluding initial investment)
+        totalHousingCost += annualHousingCost;
+
+        // Annual rent costs
+        totalRentPaid += annualRent;
+
+        // Calculate potential sale scenario at this point
+        const closingCostsSellingAmount = homeValue * (closingCostsSelling / 100);
+        const potentialCapitalGains = Math.max(0, homeValue - purchasePrice - HOME_CAPITAL_GAINS_EXCLUSION_MFJ);
+
+        // Calculate capital gains tax
+        let capitalGainsTax = 0;
+        if (potentialCapitalGains > 0) {
+            // Federal capital gains tax
+            capitalGainsTax = potentialCapitalGains * capitalGainsTaxRate;
+
+            // State capital gains tax (if applicable)
+            if (stateTaxBrackets.length > 0) {
+                // Simplified state tax calculation for capital gains
+                const stateRate = stateTaxBrackets[stateTaxBrackets.length - 1].rate;
+                capitalGainsTax += potentialCapitalGains * stateRate;
+            }
+        }
+
+        // Net proceeds from sale
+        const netProceedsFromSale = homeValue - closingCostsSellingAmount - capitalGainsTax - Math.max(0, mortgageBalance);
+
+        // Calculate opportunity cost of down payment (simplified)
+        const opportunityCostRate = 0.05; // 5% alternative investment return
+        const opportunityCost = initialInvestment * Math.pow(1 + opportunityCostRate, year) - initialInvestment;
+
+        // UPDATED LOGIC: Break-even analysis
+        // Buy scenario: Net proceeds minus initial investment
+        const homeOwnershipNetValue = netProceedsFromSale - initialInvestment;
+
+        // UPDATED LOGIC: Rent scenario: Total rent paid MINUS investment returns
+        const rentInvestmentScenario = totalRentPaid - opportunityCost;
+
+        // Determine if this is the break-even point
+        // Break-even occurs when the buy scenario becomes better than the rent scenario
+        if (homeOwnershipNetValue <= rentInvestmentScenario && breakEvenYear === null) {
+            breakEvenYear = year;
+        }
+
+        // Calculate CAGR if we were to sell now
+        let cagr = 0;
+        if (netProceedsFromSale > initialInvestment && year > 0) {
+            cagr = (Math.pow(netProceedsFromSale / initialInvestment, 1 / year) - 1) * 100;
+        }
+
+        projections.push({
+            year,
+            homeValue,
+            equity,
+            mortgageBalance: Math.max(0, mortgageBalance),
+            yearlyInterest,
+            yearlyPrincipal,
+            capitalGainsTax,
+            netProceedsFromSale,
+            totalHousingCost,
+            totalRentPaid,
+            opportunityCost,
+            rentInvestmentScenario,
+            homeOwnershipNetValue,
+            breakEven: rentInvestmentScenario - homeOwnershipNetValue, // Positive when renting is better
+            cagr
+        });
+    }
+
+    return {
+        projections,
+        breakEvenYear: breakEvenYear || 'N/A',
+        finalCAGR: projections[projections.length - 1]?.cagr || 0
+    };
 }
 
 // --- Helper Components ---
@@ -572,6 +713,315 @@ const RetirementAnalysis = ({ resultsByState, selectedStates, retirementInputs, 
     );
 };
 
+// --- NEW: Home-Ownership Break-Even Analysis Component ---
+const BreakEvenAnalysis = ({ resultsByState, selectedStates, stateInputs, breakEvenInputs, handleBreakEvenInputChange }) => {
+    const [activeState, setActiveState] = useState(selectedStates[0] || '');
+    const [activeTimeframe, setActiveTimeframe] = useState('10');
+    const [showFullTable, setShowFullTable] = useState(false);
+
+    const {
+        annualAppreciationRate,
+        closingCostsBuying,
+        closingCostsSelling,
+        analysisYears,
+        propertyTaxRate,
+        maintenanceRate
+    } = breakEvenInputs;
+
+    const {
+        setAnnualAppreciationRate,
+        setClosingCostsBuying,
+        setClosingCostsSelling,
+        setAnalysisYears,
+        setPropertyTaxRate,
+        setMaintenanceRate
+    } = handleBreakEvenInputChange;
+
+    useEffect(() => {
+        if (!selectedStates.includes(activeState) && selectedStates.length > 0) {
+            setActiveState(selectedStates[0]);
+        }
+    }, [selectedStates, activeState]);
+
+    const timeframeOptions = ['5', '10', '15', '20', '30'];
+
+    const breakEvenAnalysis = useMemo(() => {
+        if (!activeState || !resultsByState[activeState]) return null;
+
+        const currentStateInputs = stateInputs[activeState] || {};
+        const mortgageAmount = Number(currentStateInputs.mortgageAmount) || 0;
+        const mortgageRate = Number(currentStateInputs.mortgageRate) || 0;
+        const propertyTax = Number(currentStateInputs.propertyTax) || 0;
+        const homeInsurance = Number(currentStateInputs.homeInsurance) || 0;
+        const monthlyRent = Number(currentStateInputs.monthlyRent) || 0;
+
+        // UPDATED: Calculate purchase price from mortgage amount (assuming 80% LTV)
+        const purchasePrice = mortgageAmount / 0.8;
+
+        // Calculate property tax rate if not explicitly set
+        const calcPropertyTaxRate = propertyTaxRate || (purchasePrice > 0 ? (propertyTax / purchasePrice) * 100 : 1);
+
+        return calculateHomeValueProjection({
+            purchasePrice: purchasePrice,
+            mortgageAmount: mortgageAmount,
+            mortgageRate: mortgageRate,
+            annualAppreciationRate: Number(annualAppreciationRate) || 3,
+            years: Number(analysisYears) || 30,
+            closingCostsBuying: Number(closingCostsBuying) || 2,
+            closingCostsSelling: Number(closingCostsSelling) || 6,
+            propertyTaxRate: calcPropertyTaxRate,
+            insuranceAnnual: homeInsurance,
+            maintenanceRate: Number(maintenanceRate) || 1,
+            rent: monthlyRent,
+            state: activeState
+        });
+    }, [activeState, resultsByState, stateInputs, annualAppreciationRate, closingCostsBuying,
+        closingCostsSelling, analysisYears, propertyTaxRate, maintenanceRate]);
+
+    // Get data series for chart
+    const chartData = useMemo(() => {
+        if (!breakEvenAnalysis) return [];
+
+        const years = Number(activeTimeframe) || 10;
+
+        return breakEvenAnalysis.projections
+            .filter(row => row.year <= years)
+            .map(row => ({
+                year: row.year,
+                homeValue: row.homeValue,
+                equity: row.equity,
+                netProceedsFromSale: row.netProceedsFromSale,
+                rentScenario: row.rentInvestmentScenario,
+                breakEven: row.breakEven
+            }));
+    }, [breakEvenAnalysis, activeTimeframe]);
+
+    if (selectedStates.length < 1) {
+        return (
+            <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-200">
+                <h2 className="text-xl sm:text-2xl font-semibold text-gray-800 mb-4">Home-Ownership Break-Even Analysis</h2>
+                <p className="text-gray-600">Please select at least one state to run break-even calculations.</p>
+            </div>
+        );
+    }
+
+    return (
+        <div className="space-y-8">
+            <div className="bg-white p-4 sm:p-6 rounded-xl shadow-lg border border-gray-200">
+                <h2 className="text-xl sm:text-2xl font-semibold text-gray-800 border-b pb-3 mb-6">Home-Ownership Break-Even Analysis</h2>
+
+                <div className="flex flex-col lg:flex-row gap-6 mb-6">
+                    {/* Left side: inputs */}
+                    <div className="flex-1 space-y-4">
+                        <div className="flex items-center gap-4 mb-4">
+                            <div className="w-full">
+                                <label htmlFor="activeStateSelect" className="block text-sm font-medium text-gray-700 mb-1">State to Analyze</label>
+                                <select
+                                    id="activeStateSelect"
+                                    value={activeState}
+                                    onChange={(e) => setActiveState(e.target.value)}
+                                    className="w-full p-2 border border-gray-300 rounded-md bg-white"
+                                >
+                                    {selectedStates.map(s => <option key={s} value={s}>{s}</option>)}
+                                </select>
+                            </div>
+
+                            <div className="w-full">
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Chart Timeframe</label>
+                                <div className="flex rounded-md shadow-sm">
+                                    {timeframeOptions.map(option => (
+                                        <button
+                                            key={option}
+                                            onClick={() => setActiveTimeframe(option)}
+                                            className={`flex-1 px-3 py-1 text-xs font-medium border ${activeTimeframe === option
+                                                    ? 'bg-indigo-500 text-white'
+                                                    : 'bg-white text-gray-600'
+                                                } ${option === timeframeOptions[0] ? 'rounded-l-md' :
+                                                    option === timeframeOptions[timeframeOptions.length - 1] ? 'rounded-r-md' : ''
+                                                }`}
+                                        >
+                                            {option} years
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <InputField
+                                label="Annual Home Appreciation (%)"
+                                value={annualAppreciationRate}
+                                onChange={setAnnualAppreciationRate}
+                                isRate={true}
+                            />
+                            <InputField
+                                label="Maintenance Cost (% of value/year)"
+                                value={maintenanceRate}
+                                onChange={setMaintenanceRate}
+                                isRate={true}
+                            />
+                            <InputField
+                                label="Buyer's Closing Costs (%)"
+                                value={closingCostsBuying}
+                                onChange={setClosingCostsBuying}
+                                isRate={true}
+                            />
+                            <InputField
+                                label="Seller's Closing Costs (%)"
+                                value={closingCostsSelling}
+                                onChange={setClosingCostsSelling}
+                                isRate={true}
+                            />
+                            <InputField
+                                label="Analysis Period (years)"
+                                value={analysisYears}
+                                onChange={setAnalysisYears}
+                            />
+                            <InputField
+                                label="Property Tax Rate (%)"
+                                value={propertyTaxRate}
+                                onChange={setPropertyTaxRate}
+                                isRate={true}
+                            />
+                        </div>
+                    </div>
+
+                    {/* Right side: summary stats */}
+                    <div className="lg:w-2/5 bg-gray-50 p-4 rounded-lg border border-gray-200">
+                        <h3 className="text-lg font-semibold text-gray-800 mb-4">Analysis Summary for {activeState}</h3>
+                        <div className="space-y-3">
+                            <div className="flex justify-between items-center border-b pb-2">
+                                <span className="text-sm font-medium text-gray-600">Purchase Price:</span>
+                                <span className="text-sm font-semibold">{formatCurrency(stateInputs[activeState]?.mortgageAmount || 0)}</span>
+                            </div>
+                            <div className="flex justify-between items-center border-b pb-2">
+                                <span className="text-sm font-medium text-gray-600">Monthly Rent Equivalent:</span>
+                                <span className="text-sm font-semibold">{formatCurrency(stateInputs[activeState]?.monthlyRent || 0)}</span>
+                            </div>
+                            <div className="flex justify-between items-center border-b pb-2">
+                                <span className="text-sm font-medium text-gray-600">Break-Even Point:</span>
+                                <span className="text-sm font-bold text-indigo-700">
+                                    {breakEvenAnalysis?.breakEvenYear === 'N/A'
+                                        ? 'N/A'
+                                        : `${breakEvenAnalysis?.breakEvenYear} years`}
+                                </span>
+                            </div>
+                            <div className="flex justify-between items-center border-b pb-2">
+                                <span className="text-sm font-medium text-gray-600">Final CAGR After Costs:</span>
+                                <span className={`text-sm font-bold ${breakEvenAnalysis?.finalCAGR > 0 ? 'text-green-600' :
+                                        breakEvenAnalysis?.finalCAGR < 0 ? 'text-red-600' : 'text-gray-700'
+                                    }`}>
+                                    {breakEvenAnalysis?.finalCAGR.toFixed(2)}%
+                                </span>
+                            </div>
+                            <div className="flex justify-between items-center border-b pb-2">
+                                <span className="text-sm font-medium text-gray-600">Value After {analysisYears} Years:</span>
+                                <span className="text-sm font-semibold">
+                                    {formatCurrency(breakEvenAnalysis?.projections[breakEvenAnalysis.projections.length - 1]?.homeValue || 0)}
+                                </span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                                <span className="text-sm font-medium text-gray-600">Net Proceeds After Sale:</span>
+                                <span className="text-sm font-semibold">
+                                    {formatCurrency(breakEvenAnalysis?.projections[breakEvenAnalysis.projections.length - 1]?.netProceedsFromSale || 0)}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Chart */}
+                <h3 className="text-lg font-semibold text-gray-800 mb-4 mt-6">Break-Even Visualization ({activeTimeframe} Years)</h3>
+                <ResponsiveContainer width="100%" height={400}>
+                    <LineChart data={chartData} margin={{ top: 10, right: 30, left: 10, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="year" label={{ value: 'Years', position: 'insideBottomRight', offset: -5 }} />
+                        <YAxis tickFormatter={(value) => formatCurrency(value, 0)} />
+                        <Tooltip formatter={(value) => formatCurrency(value, 0)} />
+                        <Legend />
+                        <ReferenceLine y={0} stroke="#000" />
+                        <Line type="monotone" dataKey="homeValue" name="Home Value" stroke="#8884d8" strokeWidth={2} />
+                        <Line type="monotone" dataKey="equity" name="Home Equity" stroke="#82ca9d" strokeWidth={2} />
+                        <Line type="monotone" dataKey="netProceedsFromSale" name="Net Proceeds After Sale" stroke="#ff7300" strokeWidth={2} />
+                        <Line type="monotone" dataKey="rentScenario" name="Rent + Invest Scenario" stroke="#ff0000" strokeWidth={2} />
+                        <Line type="monotone" dataKey="breakEven" name="Buy vs. Rent Advantage" stroke="#00C49F" strokeDasharray="5 5" />
+                    </LineChart>
+                </ResponsiveContainer>
+
+                {/* Table */}
+                <div className="mt-8">
+                    <div className="flex justify-between items-center mb-4">
+                        <h3 className="text-lg font-semibold text-gray-800">Year-by-Year Breakdown</h3>
+                        <button
+                            onClick={() => setShowFullTable(prev => !prev)}
+                            className="text-sm text-indigo-600 hover:text-indigo-800"
+                        >
+                            {showFullTable ? 'Show Less' : 'Show Full Table'}
+                        </button>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-gray-200">
+                            <thead className="bg-gray-50">
+                                <tr>
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Year</th>
+                                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Home Value</th>
+                                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Equity</th>
+                                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Mortgage Balance</th>
+                                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Capital Gains Tax</th>
+                                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Net After Sale</th>
+                                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">CAGR</th>
+                                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Rent Alternative</th>
+                                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Buy Advantage</th>
+                                </tr>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-gray-200">
+                                {breakEvenAnalysis?.projections
+                                    .filter(row => showFullTable ? true : (row.year % 5 === 0 || row.year === 1 || row.year === breakEvenAnalysis.breakEvenYear))
+                                    .map(row => (
+                                        <tr key={row.year} className={row.year === breakEvenAnalysis.breakEvenYear ? 'bg-green-50' : ''}>
+                                            <td className="px-4 py-2 whitespace-nowrap text-sm font-medium text-gray-900">
+                                                {row.year}{row.breakEven <= 0 ? ' ⭐' : ''}
+                                            </td>
+                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-right font-mono">
+                                                {formatCurrency(row.homeValue)}
+                                            </td>
+                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-right font-mono">
+                                                {formatCurrency(row.equity)}
+                                            </td>
+                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-right font-mono">
+                                                {formatCurrency(row.mortgageBalance)}
+                                            </td>
+                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-right font-mono">
+                                                {formatCurrency(row.capitalGainsTax)}
+                                            </td>
+                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-right font-mono">
+                                                {formatCurrency(row.netProceedsFromSale)}
+                                            </td>
+                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-right font-mono">
+                                                {row.cagr.toFixed(2)}%
+                                            </td>
+                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-right font-mono">
+                                                {formatCurrency(row.rentInvestmentScenario)}
+                                            </td>
+                                            <td className={`px-4 py-2 whitespace-nowrap text-sm text-right font-mono ${row.breakEven <= 0 ? 'text-green-600' : 'text-red-600'
+                                                }`}>
+                                                {formatCurrency(row.breakEven)}
+                                            </td>
+                                        </tr>
+                                    ))}
+                            </tbody>
+                        </table>
+                    </div>
+                    <p className="mt-3 text-xs text-gray-500">
+                        <b>Buy Advantage</b> shows the financial advantage of buying vs. renting at each point. Positive values mean buying is ahead.
+                        The star (⭐) indicates the break-even year.
+                    </p>
+                </div>
+            </div>
+        </div>
+    );
+};
 
 export default function TaxCalculator() {
     const [activeView, setActiveView] = useState('comparison');
@@ -603,6 +1053,16 @@ export default function TaxCalculator() {
         fiNumber: 2000000, swr: 4,
     });
 
+    // NEW: State for break-even analysis inputs
+    const [breakEvenInputs, setBreakEvenInputs] = useState({
+        annualAppreciationRate: 3,
+        closingCostsBuying: 2,
+        closingCostsSelling: 6,
+        analysisYears: 30,
+        propertyTaxRate: 1,
+        maintenanceRate: 1
+    });
+
     const [scenarioName, setScenarioName] = useState("");
     const [selectedScenario, setSelectedScenario] = useState("");
     const [savedScenarios, setSavedScenarios] = useState({});
@@ -629,14 +1089,18 @@ export default function TaxCalculator() {
 
     const handleSaveScenario = useCallback(() => {
         if (!scenarioName) { alert("Please enter a scenario name."); return; }
-        // UPDATED: Save all inputs including cash flow and retirement
-        const scenarioData = { income, stGains, ltGains, hsa, k401, medicalPremiums, otherItemized, selectedStates, stateInputs, cashFlowInputs, retirementInputs };
+        // UPDATED: Save all inputs including cash flow, retirement, and break-even
+        const scenarioData = {
+            income, stGains, ltGains, hsa, k401, medicalPremiums, otherItemized,
+            selectedStates, stateInputs, cashFlowInputs, retirementInputs, breakEvenInputs
+        };
         const updatedScenarios = { ...getStoredScenarios(), [scenarioName]: scenarioData };
         saveScenarios(updatedScenarios);
         setSavedScenarios(updatedScenarios);
         alert(`Scenario "${scenarioName}" saved!`);
         setScenarioName("");
-    }, [scenarioName, income, stGains, ltGains, hsa, k401, medicalPremiums, otherItemized, selectedStates, stateInputs, cashFlowInputs, retirementInputs]);
+    }, [scenarioName, income, stGains, ltGains, hsa, k401, medicalPremiums, otherItemized,
+        selectedStates, stateInputs, cashFlowInputs, retirementInputs, breakEvenInputs]);
 
     const handleLoadScenario = useCallback((name) => {
         const scenario = savedScenarios[name];
@@ -650,9 +1114,10 @@ export default function TaxCalculator() {
             setOtherItemized(scenario.otherItemized ?? 5000);
             setSelectedStates(scenario.selectedStates ?? ['California', 'Texas']);
             setStateInputs(scenario.stateInputs ?? {});
-            // UPDATED: Load cash flow and retirement inputs
+            // UPDATED: Load cash flow, retirement, and break-even inputs
             setCashFlowInputs(scenario.cashFlowInputs ?? {});
             setRetirementInputs(prev => ({ ...prev, ...(scenario.retirementInputs || {}) }));
+            setBreakEvenInputs(prev => ({ ...prev, ...(scenario.breakEvenInputs || {}) }));
             setSelectedScenario(name);
         }
     }, [savedScenarios]);
@@ -672,13 +1137,17 @@ export default function TaxCalculator() {
             alert("Please select a scenario to update.");
             return;
         }
-        // UPDATED: Update with all inputs
-        const scenarioData = { income, stGains, ltGains, hsa, k401, medicalPremiums, otherItemized, selectedStates, stateInputs, cashFlowInputs, retirementInputs };
+        // UPDATED: Update with all inputs including break-even
+        const scenarioData = {
+            income, stGains, ltGains, hsa, k401, medicalPremiums, otherItemized,
+            selectedStates, stateInputs, cashFlowInputs, retirementInputs, breakEvenInputs
+        };
         const updatedScenarios = { ...getStoredScenarios(), [selectedScenario]: scenarioData };
         saveScenarios(updatedScenarios);
         setSavedScenarios(updatedScenarios);
         alert(`Scenario "${selectedScenario}" updated!`);
-    }, [selectedScenario, income, stGains, ltGains, hsa, k401, medicalPremiums, otherItemized, selectedStates, stateInputs, cashFlowInputs, retirementInputs]);
+    }, [selectedScenario, income, stGains, ltGains, hsa, k401, medicalPremiums, otherItemized,
+        selectedStates, stateInputs, cashFlowInputs, retirementInputs, breakEvenInputs]);
 
     const handleStateInputChange = useCallback((state, field, value) => {
         setStateInputs(prev => ({ ...prev, [state]: { ...(prev[state] || {}), [field]: value } }));
@@ -700,6 +1169,15 @@ export default function TaxCalculator() {
         setSwr: (val) => setRetirementInputs(p => ({ ...p, swr: val })),
     }), []);
 
+    // NEW: Handlers for break-even analysis inputs
+    const handleBreakEvenInputChange = useMemo(() => ({
+        setAnnualAppreciationRate: (val) => setBreakEvenInputs(p => ({ ...p, annualAppreciationRate: val })),
+        setClosingCostsBuying: (val) => setBreakEvenInputs(p => ({ ...p, closingCostsBuying: val })),
+        setClosingCostsSelling: (val) => setBreakEvenInputs(p => ({ ...p, closingCostsSelling: val })),
+        setAnalysisYears: (val) => setBreakEvenInputs(p => ({ ...p, analysisYears: val })),
+        setPropertyTaxRate: (val) => setBreakEvenInputs(p => ({ ...p, propertyTaxRate: val })),
+        setMaintenanceRate: (val) => setBreakEvenInputs(p => ({ ...p, maintenanceRate: val })),
+    }), []);
 
     const handleStateSelection = useCallback((state) => {
         setSelectedStates(prevSelectedStates => {
@@ -1046,6 +1524,7 @@ export default function TaxCalculator() {
                                 <TabButton label="State Comparison" isActive={activeView === 'comparison'} onClick={() => setActiveView('comparison')} />
                                 <TabButton label="Cash Flow" isActive={activeView === 'cashflow'} onClick={() => setActiveView('cashflow')} />
                                 <TabButton label="Retirement Analysis" isActive={activeView === 'retirement'} onClick={() => setActiveView('retirement')} />
+                                <TabButton label="Break-Even Analysis" isActive={activeView === 'breakeven'} onClick={() => setActiveView('breakeven')} />
                             </nav>
                         </div>
 
@@ -1259,6 +1738,7 @@ export default function TaxCalculator() {
                                                             (resultsByState[state]?.monthlyTakeHome ?? 0) -
                                                             (resultsByState[state]?.rent?.monthlyTakeHome ?? 0);
                                                         const netMortgageCost = piti - taxSavings;
+                                            
                                                         const rent = resultsByState[state]?.rent?.monthlyHousingCost ?? Number(stateInputs[state]?.monthlyRent ?? 0);
                                                         const cashDelta = netMortgageCost - rent;
                                                         return (
@@ -1300,6 +1780,16 @@ export default function TaxCalculator() {
                                 selectedStates={selectedStates}
                                 retirementInputs={retirementInputs}
                                 handleRetirementInputChange={handleRetirementInputChange}
+                            />
+                        )}
+
+                        {activeView === 'breakeven' && (
+                            <BreakEvenAnalysis
+                                resultsByState={resultsByState}
+                                selectedStates={selectedStates}
+                                stateInputs={stateInputs}
+                                breakEvenInputs={breakEvenInputs}
+                                handleBreakEvenInputChange={handleBreakEvenInputChange}
                             />
                         )}
                     </div>
